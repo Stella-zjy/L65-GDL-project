@@ -19,7 +19,7 @@ class DiffPoolGNN(torch.nn.Module):
     def __init__(self, num_node_features, num_classes):
         super(DiffPoolGNN, self).__init__()
 
-        num_hidden_units = 16
+        num_hidden_units = 64
         num_clusters1 = 8
         num_clusters2 = 2
 
@@ -27,6 +27,8 @@ class DiffPoolGNN(torch.nn.Module):
         self.conv2 = DenseGCNConv(num_hidden_units, num_hidden_units)
         self.conv3 = DenseGCNConv(num_hidden_units, num_hidden_units)
         self.conv4 = DenseGCNConv(num_hidden_units, num_hidden_units)
+        # self.conv5 = DenseGCNConv(num_hidden_units, num_hidden_units)
+        # self.conv6 = DenseGCNConv(num_hidden_units, num_hidden_units)
 
         self.pool1 = DiffPool(num_hidden_units, num_clusters1)
         self.pool2 = DiffPool(num_hidden_units, num_clusters2)
