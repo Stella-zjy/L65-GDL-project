@@ -16,6 +16,7 @@ def prepare_data(dataset, train_split, batch_size):
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True)
+    visual_data_loader = DataLoader(test_set, batch_size=100, shuffle=True)
 
     train_zeros = 0
     train_ones = 0
@@ -32,7 +33,7 @@ def prepare_data(dataset, train_split, batch_size):
     print()
     print(f"Class split - Training 0: {train_zeros} 1: {train_ones}, Test 0: {test_zeros} 1: {test_ones}")
 
-    return train_loader, test_loader
+    return train_loader, test_loader, visual_data_loader
 
 
 
