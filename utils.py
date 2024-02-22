@@ -16,7 +16,7 @@ def prepare_data(dataset, train_split, batch_size):
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True)
-    visual_data_loader = DataLoader(test_set, batch_size=100, shuffle=True)
+    visual_data_loader = DataLoader(test_set, batch_size=200, shuffle=True)
 
     train_zeros = 0
     train_ones = 0

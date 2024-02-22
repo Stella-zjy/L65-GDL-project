@@ -42,6 +42,7 @@ class DiffPool(torch.nn.Module):
 
     def forward(self, x, adj, mask=None):
         s = F.softmax(self.s(x), dim=1)
+        # s = self.s(x)
         x, adj, l1, e1, cluster_assignments = my_dense_diff_pool(x, adj, s, mask=mask)
         return x, adj, l1, e1, cluster_assignments
 
@@ -81,7 +82,7 @@ class DiffPoolGNN(torch.nn.Module):
 
 
     def forward(self, x, adj, mask=None):
-        # Two GCN Layers
+        # Four GCN Layers
         x = F.relu(self.conv1(x, adj))
         x = F.relu(self.conv2(x, adj))
         x = F.relu(self.conv3(x, adj))
@@ -91,6 +92,7 @@ class DiffPoolGNN(torch.nn.Module):
 
         # First Diff-Pooling Layer
         x, adj, l1, e1, cluster_assignments1 = self.pool1(x, adj)
+        
         out1 = x
 
         # Two GCN Layers
@@ -101,6 +103,7 @@ class DiffPoolGNN(torch.nn.Module):
 
         # Second Diff-Pooling Layer
         x, adj, l2, e2, cluster_assignments2 = self.pool2(x, adj)
+        
         out2 = x
 
         # Classifier
