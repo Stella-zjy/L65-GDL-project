@@ -34,18 +34,45 @@ def my_dense_diff_pool(x: Tensor, adj: Tensor, s: Tensor, mask: Optional[Tensor]
     return out, out_adj, link_loss, ent_loss, cluster_assignments
 
 
+class GNN(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels,
+                 normalize=False, lin=True):
+        super(GNN, self).__init__()
+
+        self.convs = torch.nn.ModuleList()
+        self.bns = torch.nn.ModuleList()
+
+        self.convs.append(DenseGCNConv(in_channels, hidden_channels, normalize))
+        # self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
+        #
+        self.convs.append(DenseGCNConv(hidden_channels, hidden_channels, normalize))
+        # self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
+        #
+        self.convs.append(DenseGCNConv(hidden_channels, out_channels, normalize))
+        # self.bns.append(torch.nn.BatchNorm1d(out_channels))
+
+    def forward(self, x, adj, mask=None):
+        batch_size, num_nodes, in_channels = x.size()
+
+        for step in range(len(self.convs)):
+            x = F.relu(self.convs[step](x, adj, mask))
+            # x = self.bns[step](F.relu(self.convs[step](x, adj, mask)))
+        return x
+
 
 class DiffPool(torch.nn.Module):
     def __init__(self, num_channels, num_clusters):
         super(DiffPool, self).__init__()
-        self.s = torch.nn.Linear(num_channels, num_clusters)
+        self.gnn1_pool = GNN(num_channels, 32, num_clusters)
+        self.gnn1_embed = GNN(num_channels, 32, 32)
+
 
     def forward(self, x, adj, mask=None):
-        s = F.softmax(self.s(x), dim=1)
-        # s = self.s(x)
-        x, adj, l1, e1, cluster_assignments = my_dense_diff_pool(x, adj, s, mask=mask)
-        return x, adj, l1, e1, cluster_assignments
-
+        s = self.gnn1_pool(x, adj, mask)
+        s = F.softmax(s, dim=1)
+        x = self.gnn1_embed(x, adj, mask)
+        x, adj, l1, e1, cluster_assignments = my_dense_diff_pool(x, adj, s, mask)
+        return   x, adj, l1, e1, cluster_assignments 
 
 # class DiffPool(torch.nn.Module):
 #     def __init__(self, num_channels, num_clusters):
