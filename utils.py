@@ -3,6 +3,9 @@ import pandas as pd
 import torch
 from torch_geometric.loader import DataLoader
 from torch_geometric.data import Batch
+import matplotlib.pyplot as plt
+import networkx as nx
+from torch_geometric.utils import to_networkx
 
 
 # Data loader for train test split
@@ -68,3 +71,65 @@ def pad_features(batch_data):
     # Stack all padded matrices to create a batched tensor
     batched_x = torch.stack(padded_features, dim=0)
     return batched_x
+
+def visualize_graphs_with_pooled_nodes_concept(data, cluster_top_features, node_info, labels, real_graph, clustering_type, reduction_type, layer_num, k, num_of_diffpool):
+    """
+    Visualizes the graphs with specified nodes highlighted and labeled by concepts.
+    """
+    num_rows = len(cluster_top_features)
+    num_cols = max(len(v) for v in cluster_top_features.values())
+
+    # Pre-compute the starting index for each graph
+    starting_indices = [0]  # The first graph starts at index 0
+    for num_nodes in real_graph[:-1]:  # Exclude the last graph as its starting index is not needed
+        starting_indices.append(starting_indices[-1] + num_nodes)
+
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(18, 3 * num_rows + 2), squeeze=False)
+    fig.suptitle(f'Nearest Instances to {clustering_type}, with k = {k}, number of diffpool clusters {num_of_diffpool}, Cluster Centroid for {reduction_type} Activations of Layer {layer_num}', y=1.005)
+
+    axes = axes.flatten()
+
+    for cluster_idx, (cluster, feature_indexes) in enumerate(cluster_top_features.items()):
+        for feature_idx, feature_index in enumerate(feature_indexes):
+            batch_index, node_indexes = node_info[feature_index]
+
+            G = to_networkx(data[batch_index], to_undirected=True)
+
+            # Use the starting index for this graph to map labels
+            start_index = starting_indices[batch_index]
+            node_labels = {i: labels[start_index + i] for i in G.nodes()}
+
+            node_colors = ["gray" if i not in node_indexes else "red" for i in G.nodes()]
+
+            ax = axes[cluster_idx * num_cols + feature_idx]
+            nx.draw(G, ax=ax, node_color=node_colors, labels=node_labels, with_labels=True, node_size=50)
+            ax.set_title(f"Cluster {cluster}, Feature {feature_index}")
+
+    plt.tight_layout()
+    plt.show()
+
+def find_top_closest(features_np, labels_km, centroids, top_n=5):
+    # Dictionary to hold the indices of the top closest points for each cluster
+    top_closest_indices = {i: [] for i in range(len(centroids))}
+
+    # Calculate the distances and find top closest for each cluster
+    for i, centroid in enumerate(centroids):
+        # Find indices of points belonging to the current cluster
+        indices = np.where(labels_km == i)[0]
+        cluster_points = features_np[indices]
+
+        # Calculate distances from the centroid to each point in the cluster
+        distances = np.linalg.norm(cluster_points - centroid, axis=1)
+
+        # Get indices of top N closest points
+        closest_points_indices = np.argsort(distances)[:top_n]
+
+        # Store the global indices of these points
+        top_closest_indices[i] = indices[closest_points_indices]
+
+    return top_closest_indices
+
+def to_networkx(data):
+    # Convert a PyG graph to a networkx graph
+    G = pyg_utils.to_networkx(data, to_undirected=True)
+    return G
