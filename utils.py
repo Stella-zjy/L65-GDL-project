@@ -6,6 +6,7 @@ from torch_geometric.data import Batch
 import matplotlib.pyplot as plt
 import networkx as nx
 from torch_geometric.utils import to_networkx
+import torch_geometric.utils as pyg_utils
 
 
 # Data loader for train test split
