@@ -1,113 +1,189 @@
 import numpy as np
 import pandas as pd
 import torch
-from torch_geometric.loader import DataLoader
-from torch_geometric.data import Batch
 import matplotlib.pyplot as plt
 import networkx as nx
 from torch_geometric.utils import to_networkx
-import torch_geometric.utils as pyg_utils
+
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+import umap
+from sklearn.cluster import KMeans
 
 
-# Data loader for train test split
-def prepare_data(dataset, train_split, batch_size):
-    dataset = dataset.shuffle()
-
-    # Train test split
-    train_idx = int(len(dataset) * train_split)
-    train_set = dataset[:train_idx]
-    test_set = dataset[train_idx:]
-
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True)
-    visual_data_loader = DataLoader(test_set, batch_size=200, shuffle=True)
-
-    train_zeros = 0
-    train_ones = 0
-    for data in train_set:
-        train_ones += np.sum(data.y.detach().numpy())
-        train_zeros += len(data.y.detach().numpy()) - np.sum(data.y.detach().numpy())
-
-    test_zeros = 0
-    test_ones = 0
-    for data in test_set:
-        test_ones += np.sum(data.y.detach().numpy())
-        test_zeros += len(data.y.detach().numpy()) - np.sum(data.y.detach().numpy())
-
-    print()
-    print(f"Class split - Training 0: {train_zeros} 1: {train_ones}, Test 0: {test_zeros} 1: {test_ones}")
-
-    return train_loader, test_loader, visual_data_loader
+# Get the actual number of nodes in each graph of the visual_data_batch
+# len(graph_node) = batch size of visual data loader
+def real_graph_node(visual_data_batch):
+    graph_nodes = []
+    batch_size = len(visual_data_batch)
+    for i in range(batch_size):
+        graph_nodes.append(visual_data_batch[i].num_nodes)
+    return graph_nodes
 
 
+def kmeans_clustering(features, k):
+    # Apply K-means clustering
+    kmeans = KMeans(n_clusters=k)
+    kmeans.fit(features)
+    # Get cluster labels and centroids
+    labels = kmeans.labels_
+    centroids = kmeans.cluster_centers_
+    return labels, centroids
 
-# To make node feature vector in the size of [B, N, F], to be compatible with input tensor size of DenseGCNConv
-# B: batch size
-# N: number of nodes
-# F: feature dimension
-def pad_features(batch_data):
-    # Check if the input is already a batched data object
-    if isinstance(batch_data, Batch):
-        data = batch_data
-    else:
-        # Convert the list of data objects to a batched data object
-        data = Batch.from_data_list(batch_data)
 
-    # Find the maximum number of nodes in any graph in the batch
-    max_nodes = 0
-    for i in range(data.num_graphs):
-        max_nodes = max(max_nodes, (data.batch == i).sum().item())
+# Dimension Reduction for 2D visualization
+def dimension_reduction(features_np, DR_method):
+    if DR_method == 'PCA':
+        pca = PCA(n_components=2)
+        features_DR = pca.fit_transform(features_np)
+    elif DR_method == 'TSNE':
+        tsne = TSNE(n_components=2)
+        features_DR = tsne.fit_transform(features_np)
+    elif DR_method == 'UMAP':
+        reducer = umap.UMAP(n_components=2)
+        features_DR = reducer.fit_transform(features_np)
+    return features_DR
 
-    # Pad each graph's node feature matrix
-    padded_features = []
-    for i in range(data.num_graphs):
-        # Extract the features of the i-th graph in the batch
-        x = data.x[data.batch == i]
-        num_nodes = x.size(0)
-        num_features = x.size(1)
-        padding = torch.zeros(max_nodes - num_nodes, num_features, device=x.device)
-        padded_x = torch.cat([x, padding], dim=0)
-        padded_features.append(padded_x)
 
-    # Stack all padded matrices to create a batched tensor
-    batched_x = torch.stack(padded_features, dim=0)
-    return batched_x
 
-def visualize_graphs_with_pooled_nodes_concept(data, cluster_top_features, node_info, labels, real_graph, clustering_type, reduction_type, layer_num, k, num_of_diffpool):
+# Visualization of the activation space before the first DiffPool layer
+# Coloring according to K-means clustering of the raw activation space
+def before_first_diffpool_plot(activation_space_before, graph_nodes, DR_method, k):
     """
-    Visualizes the graphs with specified nodes highlighted and labeled by concepts.
+    Input:
+        activation_space_before: B * N * num_hidden_units
+        graph_nodes: len() = B, containing the real number of nodes in each graph
+        DR_method: 'PCA' or 'TSNE' or 'UMAP'
+        k: cluster number for K-means clustering
     """
-    num_rows = len(cluster_top_features)
-    num_cols = max(len(v) for v in cluster_top_features.values())
+    relevant_features = []
+    for idx, real_node_number in enumerate(graph_nodes):
+        # Extract the features for the relevant nodes in the graph
+        relevant_features.append(activation_space_before[idx, :real_node_number, :])
+    # Concatenate all the relevant features along the first dimension
+    features = torch.cat(relevant_features, dim=0)
 
-    # Pre-compute the starting index for each graph
-    starting_indices = [0]  # The first graph starts at index 0
-    for num_nodes in real_graph[:-1]:  # Exclude the last graph as its starting index is not needed
-        starting_indices.append(starting_indices[-1] + num_nodes)
+    # Convert to numpy for dimensionality reduction
+    features_np = features.detach().cpu().numpy()
 
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(18, 3 * num_rows + 2), squeeze=False)
-    fig.suptitle(f'Nearest Instances to {clustering_type}, with k = {k}, number of diffpool clusters {num_of_diffpool}, Cluster Centroid for {reduction_type} Activations of Layer {layer_num}', y=1.005)
+    # K-means clustering of the raw activation space to get clustering labels for each node
+    labels, centroids = kmeans_clustering(features_np, k)
 
-    axes = axes.flatten()
+    # Apply Dimension Reduction
+    features_DR = dimension_reduction(features_np, DR_method)
 
-    for cluster_idx, (cluster, feature_indexes) in enumerate(cluster_top_features.items()):
-        for feature_idx, feature_index in enumerate(feature_indexes):
-            batch_index, node_indexes = node_info[feature_index]
 
-            G = to_networkx(data[batch_index], to_undirected=True)
+    # ========================== Plotting Activation Space ==========================
 
-            # Use the starting index for this graph to map labels
-            start_index = starting_indices[batch_index]
-            node_labels = {i: labels[start_index + i] for i in G.nodes()}
+    # Generate a colormap with distinct colors
+    colors = plt.cm.jet(np.linspace(0, 1, k))
 
-            node_colors = ["gray" if i not in node_indexes else "red" for i in G.nodes()]
+    # plt.figure(figsize=(8, 6))
 
-            ax = axes[cluster_idx * num_cols + feature_idx]
-            nx.draw(G, ax=ax, node_color=node_colors, labels=node_labels, with_labels=True, node_size=50)
-            ax.set_title(f"Cluster {cluster}, Feature {feature_index}")
+    for i, label in enumerate(range(k)):
+        idx = labels == label
+        plt.scatter(features_DR[idx, 0], features_DR[idx, 1], color=colors[i], label=f'Cluster {label}')
 
-    plt.tight_layout()
-    plt.show()
+    plt.xlabel(f'{DR_method} Component 1')
+    plt.ylabel(f'{DR_method} Component 2')
+    plt.title(f'{DR_method} Visualization of Activation Space before First DiffPool')
+    # Place the legend outside the plot
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # Adjust subplot parameters to give some space for the legend
+    plt.subplots_adjust(right=0.75)
+    plt.show()            
+        
+    return labels, centroids
+
+
+
+
+def after_first_diffpool_plot(activation_space_after, graph_nodes, cluster_assignments, DR_method, k):
+
+    batch_size, num_dp_clusters, _ = activation_space_after.shape
+
+    relevant_cluster_assignments = []
+    for idx, real_node_number in enumerate(graph_nodes):
+        # Extract diffpooled cluster labels for each graph
+        relevant_cluster_assignments.append(torch.unique(cluster_assignments[idx, :real_node_number]))
+
+
+    relevant_features = []
+    info_graph_node = []
+    for b in range(batch_size):
+        for c in relevant_cluster_assignments[b]:
+            node_indexes = torch.where(cluster_assignments[b, :graph_nodes[b]] == c)[0]
+            relevant_features.append(activation_space_after[b, int(c), :])
+            info_graph_node.append([b, node_indexes.tolist()])
+    
+    
+    # Stack the tensors
+    features = torch.stack(relevant_features)
+    # Convert to numpy array
+    features_np = features.detach().cpu().numpy()
+
+    # K-means clustering of the raw activation space to get clustering labels for each node
+    labels_km, centroids = kmeans_clustering(features_np, k)
+
+    # Apply Dimension Reduction
+    features_DR = dimension_reduction(features_np, DR_method)
+
+
+    # Deal with diffpooled cluster labels
+    labels_dp = torch.cat(relevant_cluster_assignments).detach().cpu().numpy()
+    
+
+    # ========================== Plotting Activation Space (no clustering) ==========================
+    plt.figure()
+    plt.scatter(features_DR[:, 0], features_DR[:, 1])
+    plt.xlabel(f'{DR_method} Component 1')
+    plt.ylabel(f'{DR_method} Component 2')
+    plt.title(f'{DR_method} Visualization of Activation Space after First DiffPool')
+    plt.show()            
+
+    # ========================== Plotting Activation Space (K-Means colored) ==========================
+    
+    # Generate a colormap with distinct colors according to k-means clusters
+    colors_km = plt.cm.jet(np.linspace(0, 1, k))
+
+    plt.figure()
+    for i, label in enumerate(range(k)):
+        idx = labels_km == label
+        plt.scatter(features_DR[idx, 0], features_DR[idx, 1], color=colors_km[i], label=f'Cluster {label}')
+
+    plt.xlabel(f'{DR_method} Component 1')
+    plt.ylabel(f'{DR_method} Component 2')
+    plt.title(f'{DR_method} Visualization of Activation Space after First DiffPool (K-Means colored)')
+    # Place the legend outside the plot
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # Adjust subplot parameters to give some space for the legend
+    plt.subplots_adjust(right=0.75)
+    plt.show()   
+
+    # ========================== Plotting Activation Space (Diff-Pooling colored) ==========================  
+           
+    # Generate a colormap with distinct colors according to diffpool clusters
+    colors_dp = plt.cm.jet(np.linspace(0, 1, num_dp_clusters)) 
+
+    plt.figure()
+    for i, label in enumerate(range(num_dp_clusters)):
+        idx = labels_dp == label
+        plt.scatter(features_DR[idx, 0], features_DR[idx, 1], color=colors_dp[i], label=f'Cluster {label}')
+
+    plt.xlabel(f'{DR_method} Component 1')
+    plt.ylabel(f'{DR_method} Component 2')
+    plt.title(f'{DR_method} Visualization of Activation Space after First DiffPool (DiffPool colored)')
+    # Place the legend outside the plot
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # Adjust subplot parameters to give some space for the legend
+    plt.subplots_adjust(right=0.75)
+    plt.show()  
+
+    return labels_km, centroids, colors_km, colors_dp, labels_dp, features_np, info_graph_node
+
+
+
 
 def find_top_closest(features_np, labels_km, centroids, top_n=5):
     # Dictionary to hold the indices of the top closest points for each cluster
@@ -130,10 +206,6 @@ def find_top_closest(features_np, labels_km, centroids, top_n=5):
 
     return top_closest_indices
 
-def to_networkx(data):
-    # Convert a PyG graph to a networkx graph
-    G = pyg_utils.to_networkx(data, to_undirected=True)
-    return G
 
 def get_cluster_assignments_for_graph(graph_index, all_nodes_diffpool_assignments, real_nodes):
     """
@@ -155,6 +227,7 @@ def get_cluster_assignments_for_graph(graph_index, all_nodes_diffpool_assignment
 
     # Extract and return the cluster assignments for the specified graph
     return all_nodes_diffpool_assignments[start_index:end_index]
+
 
 def get_cluster_assignments(cluster_assignments, nodes_per_graph):
     """
@@ -179,6 +252,22 @@ def get_cluster_assignments(cluster_assignments, nodes_per_graph):
 
     return all_nodes_assignments
 
+
+
+def calculate_centroids_with_padding(data, labels):
+
+    max_label = np.max(labels)
+    centroids = np.zeros((max_label+1, data.shape[1]))
+    unique_labels = np.unique(labels)
+
+    for label in unique_labels:
+        cluster_data = data[labels == label]
+        centroids[labels] = cluster_data.mean(axis = 0)
+
+    return centroids
+
+
+
 def find_top_closest(features_np, labels_km, centroids, top_n=5):
     # Dictionary to hold the indices of the top closest points for each cluster
     top_closest_indices = {i: [] for i in range(len(centroids))}
@@ -201,8 +290,8 @@ def find_top_closest(features_np, labels_km, centroids, top_n=5):
     return top_closest_indices
 
 
-def visualize_graphs_with_diffpool_clusters(data, cluster_top_features, node_info, labels, real_graph, clustering_type,
-                                            reduction_type, layer_num, k, num_of_diffpool):
+def visualize_graphs_with_diffpool_clusters(data, cluster_top_features, node_info, labels, clustering_type,
+                                            reduction_type, layer_num, k, num_of_diffpool, cluster_assignments1, graph_nodes):
     """
     Visualizes the graphs with specified nodes highlighted and labeled by concepts, along with their diff-pool cluster visualizations.
 
@@ -214,7 +303,7 @@ def visualize_graphs_with_diffpool_clusters(data, cluster_top_features, node_inf
 
     # Pre-compute the starting index for each graph
     starting_indices = [0]  # The first graph starts at index 0
-    for num_nodes in real_graph[:-1]:  # Exclude the last graph as its starting index is not needed
+    for num_nodes in graph_nodes[:-1]:  # Exclude the last graph as its starting index is not needed
         starting_indices.append(starting_indices[-1] + num_nodes)
 
     fig, axes = plt.subplots(num_rows, num_cols, figsize=(18, 6 * len(cluster_top_features) + 2), squeeze=False)
