@@ -2,7 +2,7 @@ import torch
 from torch.nn import Linear
 import torch.nn.functional as F
 from torch_geometric.nn import DenseGCNConv, dense_diff_pool
-
+from math import ceil
 from typing import Optional, Tuple
 from torch import Tensor
 
