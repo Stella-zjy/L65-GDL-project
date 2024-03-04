@@ -60,7 +60,7 @@ def s_clustering(s):
 
 # Visualization of the activation space before the first DiffPool layer
 # Coloring according to K-means clustering of the raw activation space
-def before_diffpool_plot(activation_space_before, s_gnn_pool, graph_nodes_enumerate, DR_method, k, layer_num, k_control = False):
+def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_nodes_enumerate, DR_method, k, layer_num, k_control = False):
     """
     Input:
         activation_space_before: B * N * num_hidden_units
@@ -131,14 +131,40 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, graph_nodes_enumer
     # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
     plt.subplots_adjust(right=0.75)
-    plt.show()            
-        
+    plt.show()    
+
+
+    # ========================== Plotting Activation Space (Ground Truth Label colored) ========================= 
+    
+    colors2 = plt.cm.jet(np.linspace(0, 1, 2))
+
+    # Track whether the label has been used
+    labels_added = {0: False, 1: False}
+    
+    count = 0
+    for i, label in enumerate(y_labels):
+        idx = range(count, count + len(graph_nodes_enumerate[i]))
+        if not labels_added[label]:
+            plt.scatter(features_DR[idx, 0], features_DR[idx, 1], color=colors2[label], label=f'y = {label}')
+            labels_added[label] = True
+        else:
+            plt.scatter(features_DR[idx, 0], features_DR[idx, 1], color=colors2[label])
+        count += len(graph_nodes_enumerate[i])
+
+    plt.xlabel(f'{DR_method} Component 1')
+    plt.ylabel(f'{DR_method} Component 2')
+    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (Ground Truth Label colored)')
+    # Place the legend outside the plot
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # Adjust subplot parameters to give some space for the legend
+    plt.subplots_adjust(right=0.75)
+    plt.show()
+
     return labels, centroids
 
 
 
-
-def after_diffpool_plot(activation_space_after, graph_nodes_enumerate, cluster_assignments, DR_method, k, layer_num):
+def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate, cluster_assignments, DR_method, k, layer_num):
 
     batch_size, num_dp_clusters, _ = activation_space_after.shape
 
@@ -219,8 +245,34 @@ def after_diffpool_plot(activation_space_after, graph_nodes_enumerate, cluster_a
     plt.subplots_adjust(right=0.75)
     plt.show()  
 
-    return labels_km, centroids, colors_km, colors_dp, labels_dp, features_np, info_graph_node
+    # ========================== Plotting Activation Space (Ground Truth Label colored) ========================== 
 
+    colors_label = plt.cm.jet(np.linspace(0, 1, 2)) 
+    
+    labels_added = {0: False, 1: False}
+    
+    count = 0
+    plt.figure()
+    for i, label in enumerate(y_labels):
+        idx = range(count, count + len(relevant_cluster_assignments[i]))
+        if not labels_added[label]:
+            plt.scatter(features_DR[idx, 0], features_DR[idx, 1], color=colors_label[label], label=f'y = {label}')
+            labels_added[label] = True
+        else:
+            plt.scatter(features_DR[idx, 0], features_DR[idx, 1], color=colors_label[label])
+        count += len(relevant_cluster_assignments[i])
+
+    plt.xlabel(f'{DR_method} Component 1')
+    plt.ylabel(f'{DR_method} Component 2')
+    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (Ground Truth Label colored)')
+    # Place the legend outside the plot
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # Adjust subplot parameters to give some space for the legend
+    plt.subplots_adjust(right=0.75)
+    plt.show()
+  
+
+    return labels_km, centroids, colors_km, colors_dp, labels_dp, features_np, info_graph_node
 
 
 
