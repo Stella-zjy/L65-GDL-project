@@ -46,26 +46,49 @@ def dimension_reduction(features_np, DR_method):
     return features_DR
 
 
+# Binarize the s matrix in DiffPool and return clustering based on binarized assignment strings
+def s_clustering(s):
+    # Binarize 
+    binarized_s = (s > 0).float()
+    # Find unique rows
+    unique_rows, indices = torch.unique(binarized_s, dim=0, return_inverse=True)
+    # Number of unique rows
+    num_unique_rows = unique_rows.size(0)
+
+    return num_unique_rows, indices
+
 
 # Visualization of the activation space before the first DiffPool layer
 # Coloring according to K-means clustering of the raw activation space
-def before_first_diffpool_plot(activation_space_before, graph_nodes, DR_method, k):
+def before_diffpool_plot(activation_space_before, s_gnn_pool, graph_nodes_enumerate, DR_method, k, layer_num, k_control = False):
     """
     Input:
         activation_space_before: B * N * num_hidden_units
-        graph_nodes: len() = B, containing the real number of nodes in each graph
+        graph_nodes_enumerate: containing the real nodes in each graph
         DR_method: 'PCA' or 'TSNE' or 'UMAP'
         k: cluster number for K-means clustering
     """
     relevant_features = []
-    for idx, real_node_number in enumerate(graph_nodes):
+    relevant_s = []
+    for idx, real_node_number in enumerate(graph_nodes_enumerate):
         # Extract the features for the relevant nodes in the graph
-        relevant_features.append(activation_space_before[idx, :real_node_number, :])
+        relevant_features.append(activation_space_before[idx, real_node_number, :])
+        # To the same for the s matrix
+        relevant_s.append(s_gnn_pool[idx, real_node_number, :])
     # Concatenate all the relevant features along the first dimension
     features = torch.cat(relevant_features, dim=0)
+    # To the same for the revavent s
+    s = torch.cat(relevant_s, dim=0)
+
+    # s clustering
+    num_unique_rows, indices = s_clustering(s)
 
     # Convert to numpy for dimensionality reduction
     features_np = features.detach().cpu().numpy()
+
+    # Determine the K-Means cluster number based on binarized-s clustering number
+    if k_control:
+        k = num_unique_rows
 
     # K-means clustering of the raw activation space to get clustering labels for each node
     labels, centroids = kmeans_clustering(features_np, k)
@@ -74,7 +97,23 @@ def before_first_diffpool_plot(activation_space_before, graph_nodes, DR_method, 
     features_DR = dimension_reduction(features_np, DR_method)
 
 
-    # ========================== Plotting Activation Space ==========================
+    # ========================== Plotting Activation Space (Binarized-S colored) ==========================
+    colors0 = plt.cm.jet(np.linspace(0, 1, num_unique_rows))
+
+    for i, label in enumerate(indices):
+        plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors0[int(label)], label=f'Cluster {int(label)}')
+
+    plt.xlabel(f'{DR_method} Component 1')
+    plt.ylabel(f'{DR_method} Component 2')
+    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (Binarized-S colored)')
+    # Place the legend outside the plot
+    # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # Adjust subplot parameters to give some space for the legend
+    plt.subplots_adjust(right=0.75)
+    plt.show()            
+
+
+    # ========================== Plotting Activation Space (K-Means colored) ==========================
 
     # Generate a colormap with distinct colors
     colors = plt.cm.jet(np.linspace(0, 1, k))
@@ -87,9 +126,9 @@ def before_first_diffpool_plot(activation_space_before, graph_nodes, DR_method, 
 
     plt.xlabel(f'{DR_method} Component 1')
     plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space before First DiffPool')
+    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (K-Means colored)')
     # Place the legend outside the plot
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
     plt.subplots_adjust(right=0.75)
     plt.show()            
@@ -99,21 +138,21 @@ def before_first_diffpool_plot(activation_space_before, graph_nodes, DR_method, 
 
 
 
-def after_first_diffpool_plot(activation_space_after, graph_nodes, cluster_assignments, DR_method, k):
+def after_diffpool_plot(activation_space_after, graph_nodes_enumerate, cluster_assignments, DR_method, k, layer_num):
 
     batch_size, num_dp_clusters, _ = activation_space_after.shape
 
     relevant_cluster_assignments = []
-    for idx, real_node_number in enumerate(graph_nodes):
+    for idx, real_node_number in enumerate(graph_nodes_enumerate):
         # Extract diffpooled cluster labels for each graph
-        relevant_cluster_assignments.append(torch.unique(cluster_assignments[idx, :real_node_number]))
+        relevant_cluster_assignments.append(torch.unique(cluster_assignments[idx, real_node_number]))
 
 
     relevant_features = []
     info_graph_node = []
     for b in range(batch_size):
         for c in relevant_cluster_assignments[b]:
-            node_indexes = torch.where(cluster_assignments[b, :graph_nodes[b]] == c)[0]
+            node_indexes = torch.where(cluster_assignments[b, graph_nodes_enumerate[b]] == c)[0]
             relevant_features.append(activation_space_after[b, int(c), :])
             info_graph_node.append([b, node_indexes.tolist()])
     
@@ -139,7 +178,7 @@ def after_first_diffpool_plot(activation_space_after, graph_nodes, cluster_assig
     plt.scatter(features_DR[:, 0], features_DR[:, 1])
     plt.xlabel(f'{DR_method} Component 1')
     plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space after First DiffPool')
+    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num}')
     plt.show()            
 
     # ========================== Plotting Activation Space (K-Means colored) ==========================
@@ -154,7 +193,7 @@ def after_first_diffpool_plot(activation_space_after, graph_nodes, cluster_assig
 
     plt.xlabel(f'{DR_method} Component 1')
     plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space after First DiffPool (K-Means colored)')
+    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (K-Means colored)')
     # Place the legend outside the plot
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
@@ -173,7 +212,7 @@ def after_first_diffpool_plot(activation_space_after, graph_nodes, cluster_assig
 
     plt.xlabel(f'{DR_method} Component 1')
     plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space after First DiffPool (DiffPool colored)')
+    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (DiffPool colored)')
     # Place the legend outside the plot
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
@@ -291,14 +330,11 @@ def find_top_closest(features_np, labels_km, centroids, top_n=5):
 
 
 def visualize_graphs_with_diffpool_clusters(data, cluster_top_features, node_info, labels, clustering_type,
-                                            reduction_type, layer_num, k, num_of_diffpool, cluster_assignments1, graph_nodes):
+                                            layer_num, k, num_of_diffpool, cluster_assignments1, graph_nodes):
     """
     Visualizes the graphs with specified nodes highlighted and labeled by concepts, along with their diff-pool cluster visualizations.
-
-    Parameters:
-    - diffpool_cluster_assignments: A list or dictionary containing the diff-pool cluster assignments for nodes in each graph.
     """
-    num_rows = 2 * len(cluster_top_features)  # Double the number of rows for original and diff-pool visualizations
+    num_rows = 3 * len(cluster_top_features) 
     num_cols = max(len(v) for v in cluster_top_features.values())
 
     # Pre-compute the starting index for each graph
@@ -306,9 +342,9 @@ def visualize_graphs_with_diffpool_clusters(data, cluster_top_features, node_inf
     for num_nodes in graph_nodes[:-1]:  # Exclude the last graph as its starting index is not needed
         starting_indices.append(starting_indices[-1] + num_nodes)
 
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(18, 6 * len(cluster_top_features) + 2), squeeze=False)
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(20, 12 * len(cluster_top_features) + 2), squeeze=False)
     fig.suptitle(
-        f'Nearest Instances to {clustering_type}, with k = {k}, number of diffpool clusters {num_of_diffpool}, Cluster Centroid for {reduction_type} Activations of Layer {layer_num}',
+        f'{clustering_type} Central Instances, K-Means node concept with k={k}, {num_of_diffpool} DiffPool clusters, {layer_num}',
         y=1.005)
 
     axes = axes.flatten()
@@ -319,29 +355,39 @@ def visualize_graphs_with_diffpool_clusters(data, cluster_top_features, node_inf
 
             # Original Graph Visualization
             G = to_networkx(data[batch_index], to_undirected=True)
+            
+            # ======================== Highlighted Pooled Instances ======================== 
             start_index = starting_indices[batch_index]
             node_labels = {i: labels[start_index + i] for i in G.nodes()}
             node_colors = ["gray" if i not in node_indexes else "red" for i in G.nodes()]
 
-            ax = axes[2 * (cluster_idx * num_cols + feature_idx)]
+            ax = axes[3 * (cluster_idx * num_cols + feature_idx)]
             nx.draw(G, ax=ax, node_color=node_colors, labels=node_labels, with_labels=True, node_size=50)
             ax.set_title(f"Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
 
-            # Diff-Pool Cluster Visualization
-            # Assuming diffpool_cluster_assignments[batch_index] gives you the cluster assignment for each node in the graph
-            # You might need to adjust this part based on your data structure
+            # ======================== Complete Pooled Instances ========================         
             all_nodes_diffpool_assignments = get_cluster_assignments(cluster_assignments1, graph_nodes)
             cluster_assignments = get_cluster_assignments_for_graph(batch_index, all_nodes_diffpool_assignments,
                                                                     graph_nodes)
-            # You need to determine how to use cluster_assignments to color nodes or otherwise visualize the diff-pool clusters.
-            # This is a placeholder for the actual visualization logic.
-            # For simplicity, let's assume each node's color is determined by its cluster assignment:
+            
             diffpool_node_colors = [cluster_assignments[i] for i in G.nodes()]
-
-            ax = axes[2 * (cluster_idx * num_cols + feature_idx) + 1]
+            
+            ax = axes[3 * (cluster_idx * num_cols + feature_idx) + 1]
             nx.draw(G, ax=ax, node_color=diffpool_node_colors, labels=node_labels, with_labels=True,
                     cmap=plt.get_cmap('viridis'), node_size=50)
             ax.set_title(f"Diff-Pool of Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
 
+            # ======================== Graph visualization with Atom Types ======================== 
+            atom_mapping = ["C", "O", "Cl", "H", "N", "F", "Br", "S", "P", "I", "Na", "K", "Li", "Ca"]
+            atom_type = np.argmax(data[batch_index].x.detach().numpy(), axis = 1)
+            
+            atom_labels = {i: atom_mapping[atom_type[i]] for i in G.nodes()}
+            ax = axes[3 * (cluster_idx * num_cols + feature_idx) + 2]
+            nx.draw(G, ax=ax, node_color=atom_type, labels=atom_labels, with_labels=True,
+                    cmap=plt.get_cmap('viridis'), node_size=50)
+            ax.set_title(f"(Atoms) Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
+                        
+
     plt.tight_layout()
+    plt.savefig(f"graph_visualization_{clustering_type}_central_instances.png")
     plt.show()
