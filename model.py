@@ -1,7 +1,7 @@
 import torch
 from torch.nn import Linear
 import torch.nn.functional as F
-from torch_geometric.nn import DenseGCNConv
+from torch_geometric.nn import DenseGCNConv, global_mean_pool
 from math import ceil
 from typing import Optional, Tuple
 from torch import Tensor
@@ -34,10 +34,10 @@ def my_dense_diff_pool(x: Tensor, adj: Tensor, s: Tensor, mask: Optional[Tensor]
     return out, out_adj, link_loss, ent_loss, cluster_assignments
 
 
-class GNN_fromtutorial(torch.nn.Module):
+class GNN(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels,
                  normalize=False, lin=True):
-        super(GNN_fromtutorial, self).__init__()
+        super(GNN, self).__init__()
 
         self.convs = torch.nn.ModuleList()
         self.bns = torch.nn.ModuleList()
@@ -61,22 +61,20 @@ class GNN_fromtutorial(torch.nn.Module):
         return x
 
 
-class DiffPool_fromtutorial(torch.nn.Module):
-    def __init__(self, num_features, num_classes, num_nodes1, num_nodes2):
-        super(DiffPool_fromtutorial, self).__init__()
+class DiffPoolGNN(torch.nn.Module):
+    def __init__(self, num_features, num_hidden_unit, num_classes, num_nodes1, num_nodes2):
+        super(DiffPoolGNN, self).__init__()
 
-        # we now set num_nodes1 = 8
-        self.gnn1_pool = GNN_fromtutorial(num_features, 64, num_nodes1)
-        self.gnn1_embed = GNN_fromtutorial(num_features, 64, 64)
+        self.gnn1_pool = GNN(num_features, num_hidden_unit, num_nodes1)
+        self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
 
-        # we now set num_nodes2 = 2
-        self.gnn2_pool = GNN_fromtutorial(64, 64, num_nodes2)
-        self.gnn2_embed = GNN_fromtutorial(64, 64, 64, lin=False)
+        self.gnn2_pool = GNN(num_hidden_unit, num_hidden_unit, num_nodes2)
+        self.gnn2_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit, lin=False)
 
-        self.gnn3_embed = GNN_fromtutorial(64, 64, 64, lin=False)
+        self.gnn3_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit, lin=False)
 
-        self.lin1 = torch.nn.Linear(64, 64)
-        self.lin2 = torch.nn.Linear(64, num_classes)
+        self.lin1 = torch.nn.Linear(num_hidden_unit, num_hidden_unit)
+        self.lin2 = torch.nn.Linear(num_hidden_unit, num_classes)
 
     def forward(self, x, adj, mask=None):
         s = self.gnn1_pool(x, adj, mask)
@@ -86,9 +84,8 @@ class DiffPool_fromtutorial(torch.nn.Module):
 
         x, adj, l1, e1, cluster_assignment1 = my_dense_diff_pool(x, adj, s, mask)
         out1 = x
-        # x_1 = s_0.t() @ z_0
-        # adj_1 = s_0.t() @ adj_0 @ s_0
-
+        new_graph_adj = adj
+        
         s = self.gnn2_pool(x, adj)
         s_gnn2_pool = s
         x = self.gnn2_embed(x, adj)
@@ -98,8 +95,33 @@ class DiffPool_fromtutorial(torch.nn.Module):
         out2 = x
 
         x = self.gnn3_embed(x, adj)
+        x_gnn3_embed = x
 
         x = x.mean(dim=1)
         x = F.relu(self.lin1(x))
         x = self.lin2(x)
-        return F.log_softmax(x,dim=-1), l1 + l2, e1 + e2, s_gnn1_pool, x_gnn1_embed, s_gnn2_pool, x_gnn2_embed, cluster_assignment1, cluster_assignment2, out1, out2
+
+        return F.log_softmax(x,dim=-1), l1 + l2, e1 + e2, s_gnn1_pool, x_gnn1_embed, s_gnn2_pool, x_gnn2_embed, x_gnn3_embed, new_graph_adj, cluster_assignment1, cluster_assignment2, out1, out2
+
+    
+
+
+class Vanilla_GNN(torch.nn.Module):
+    def __init__(self, num_features, num_hidden_unit, num_classes):
+        super(Vanilla_GNN, self).__init__()
+
+        self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
+        
+        self.lin1 = torch.nn.Linear(num_hidden_unit, num_hidden_unit)
+        self.lin2 = torch.nn.Linear(num_hidden_unit, num_classes)
+
+    def forward(self, x, adj, mask=None):
+        x = self.gnn1_embed(x, adj, mask)
+        x_gnn1_embed = x
+
+        x = global_mean_pool(x, mask)
+
+        x = F.relu(self.lin1(x))
+        x = self.lin2(x)
+
+        return F.log_softmax(x, dim=-1), x_gnn1_embed

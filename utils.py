@@ -4,7 +4,7 @@ import torch
 import matplotlib.pyplot as plt
 import networkx as nx
 from torch_geometric.utils import to_networkx
-
+import torch.nn.functional as F
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
@@ -48,8 +48,9 @@ def dimension_reduction(features_np, DR_method):
 
 # Binarize the s matrix in DiffPool and return clustering based on binarized assignment strings
 def s_clustering(s):
+    s = F.softmax(s, dim=1)
     # Binarize 
-    binarized_s = (s > 0).float()
+    binarized_s = (s > 0.5).float()
     # Find unique rows
     unique_rows, indices = torch.unique(binarized_s, dim=0, return_inverse=True)
     # Number of unique rows
@@ -58,9 +59,23 @@ def s_clustering(s):
     return num_unique_rows, indices
 
 
+def cem_clustering(features):
+    features_softmax = F.softmax(features, dim=1)
+    features_div = torch.div(features_softmax, torch.max(features_softmax, dim=-1)[0].unsqueeze(1))
+    features_binarized = (features_div > 0.5).float()
+    
+    # Find unique rows
+    unique_rows, indices = torch.unique(features_binarized, dim=0, return_inverse=True)
+    # Number of unique rows
+    num_unique_rows = unique_rows.size(0)
+    
+    return num_unique_rows, indices
+
+
+
 # Visualization of the activation space before the first DiffPool layer
 # Coloring according to K-means clustering of the raw activation space
-def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_nodes_enumerate, DR_method, k, layer_num, k_control = False):
+def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_nodes_enumerate, DR_method, k, layer_num):
     """
     Input:
         activation_space_before: B * N * num_hidden_units
@@ -81,14 +96,15 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_no
     s = torch.cat(relevant_s, dim=0)
 
     # s clustering
-    num_unique_rows, indices = s_clustering(s)
+    num_unique_rows_s, indices_s = s_clustering(s)
+
+    # CEM-clustering
+    num_unique_rows_cem, indices_cem = cem_clustering(features)
+    
 
     # Convert to numpy for dimensionality reduction
     features_np = features.detach().cpu().numpy()
 
-    # Determine the K-Means cluster number based on binarized-s clustering number
-    if k_control:
-        k = num_unique_rows
 
     # K-means clustering of the raw activation space to get clustering labels for each node
     labels, centroids = kmeans_clustering(features_np, k)
@@ -98,19 +114,30 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_no
 
 
     # ========================== Plotting Activation Space (Binarized-S colored) ==========================
-    colors0 = plt.cm.jet(np.linspace(0, 1, num_unique_rows))
+    colors_s = plt.cm.jet(np.linspace(0, 1, num_unique_rows_s))
 
-    for i, label in enumerate(indices):
-        plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors0[int(label)], label=f'Cluster {int(label)}')
+    for i, label in enumerate(indices_s):
+        plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors_s[int(label)], label=f'Cluster {int(label)}')
 
     plt.xlabel(f'{DR_method} Component 1')
     plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (Binarized-S colored)')
-    # Place the legend outside the plot
-    # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (Binarised-S colored with {num_unique_rows_s} clusters)')
     # Adjust subplot parameters to give some space for the legend
     plt.subplots_adjust(right=0.75)
-    plt.show()            
+    plt.show()    
+
+    # ========================== Plotting Activation Space (CEM colored) ==========================
+    colors_cem = plt.cm.jet(np.linspace(0, 1, num_unique_rows_cem))
+
+    for i, label in enumerate(indices_cem):
+        plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors_cem[int(label)], label=f'Cluster {int(label)}')
+
+    plt.xlabel(f'{DR_method} Component 1')
+    plt.ylabel(f'{DR_method} Component 2')
+    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (CEM colored with {num_unique_rows_cem} clusters)')
+    # Adjust subplot parameters to give some space for the legend
+    plt.subplots_adjust(right=0.75)
+    plt.show()        
 
 
     # ========================== Plotting Activation Space (K-Means colored) ==========================
@@ -128,11 +155,10 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_no
     plt.ylabel(f'{DR_method} Component 2')
     plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (K-Means colored)')
     # Place the legend outside the plot
-    # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
     plt.subplots_adjust(right=0.75)
     plt.show()    
-
 
     # ========================== Plotting Activation Space (Ground Truth Label colored) ========================= 
     
@@ -182,9 +208,13 @@ def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate,
             relevant_features.append(activation_space_after[b, int(c), :])
             info_graph_node.append([b, node_indexes.tolist()])
     
-    
     # Stack the tensors
     features = torch.stack(relevant_features)
+
+    # CEM clustering
+    num_unique_rows, indices = cem_clustering(features)
+    
+
     # Convert to numpy array
     features_np = features.detach().cpu().numpy()
 
@@ -194,18 +224,23 @@ def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate,
     # Apply Dimension Reduction
     features_DR = dimension_reduction(features_np, DR_method)
 
-
     # Deal with diffpooled cluster labels
     labels_dp = torch.cat(relevant_cluster_assignments).detach().cpu().numpy()
     
+    
+    # ========================== Plotting Activation Space (CEM colored) ==========================
+    colors0 = plt.cm.jet(np.linspace(0, 1, num_unique_rows))
 
-    # ========================== Plotting Activation Space (no clustering) ==========================
-    plt.figure()
-    plt.scatter(features_DR[:, 0], features_DR[:, 1])
+    for i, label in enumerate(indices):
+        plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors0[int(label)], label=f'Cluster {int(label)}')
+
     plt.xlabel(f'{DR_method} Component 1')
     plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num}')
+    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (CEM colored with {num_unique_rows} clusters)')
+    # Adjust subplot parameters to give some space for the legend
+    plt.subplots_adjust(right=0.75)
     plt.show()            
+         
 
     # ========================== Plotting Activation Space (K-Means colored) ==========================
     
@@ -273,6 +308,7 @@ def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate,
   
 
     return labels_km, centroids, colors_km, colors_dp, labels_dp, features_np, info_graph_node
+
 
 
 
