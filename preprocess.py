@@ -5,23 +5,32 @@ from torch_geometric.data import Batch
 
 
 # Data loader for train test split
-def prepare_data(dataset, train_split, batch_size):
+def prepare_data(dataset, train_split, batch_size, visual_batch_size):
     dataset = dataset.shuffle()
 
     # Train test split
     train_idx = int(len(dataset) * train_split)
+    val_idx = int(len(dataset) * (train_split + (1-train_split)/2))
     train_set = dataset[:train_idx]
-    test_set = dataset[train_idx:]
+    val_set = dataset[train_idx:val_idx]
+    test_set = dataset[val_idx:]
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True)
-    visual_data_loader = DataLoader(test_set, batch_size=200, shuffle=True)
+    visual_data_loader = DataLoader(test_set, batch_size=visual_batch_size, shuffle=True)
 
     train_zeros = 0
     train_ones = 0
     for data in train_set:
         train_ones += np.sum(data.y.detach().numpy())
         train_zeros += len(data.y.detach().numpy()) - np.sum(data.y.detach().numpy())
+    
+    val_zeros = 0
+    val_ones = 0
+    for data in val_set:
+        val_ones += np.sum(data.y.detach().numpy())
+        val_zeros += len(data.y.detach().numpy()) - np.sum(data.y.detach().numpy())
 
     test_zeros = 0
     test_ones = 0
@@ -29,10 +38,9 @@ def prepare_data(dataset, train_split, batch_size):
         test_ones += np.sum(data.y.detach().numpy())
         test_zeros += len(data.y.detach().numpy()) - np.sum(data.y.detach().numpy())
 
-    print()
-    print(f"Class split - Training 0: {train_zeros} 1: {train_ones}, Test 0: {test_zeros} 1: {test_ones}")
+    print(f"Class split - Training 0: {train_zeros} 1: {train_ones}, Validation 0: {val_zeros} 1: {val_ones}, Test 0: {test_zeros} 1: {test_ones}")
 
-    return train_loader, test_loader, visual_data_loader
+    return train_loader, val_loader, test_loader, visual_data_loader
 
 
 
