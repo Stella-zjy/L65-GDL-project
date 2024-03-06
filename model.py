@@ -106,9 +106,9 @@ class DiffPoolGNN(torch.nn.Module):
     
 
 
-class Vanilla_GNN(torch.nn.Module):
+class VanillaGNN(torch.nn.Module):
     def __init__(self, num_features, num_hidden_unit, num_classes):
-        super(Vanilla_GNN, self).__init__()
+        super(VanillaGNN, self).__init__()
 
         self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
         
@@ -128,9 +128,9 @@ class Vanilla_GNN(torch.nn.Module):
     
 
 
-class Vanilla_GNN2(torch.nn.Module):
+class VanillaGNN2(torch.nn.Module):
     def __init__(self, num_features, num_hidden_unit, num_classes, num_nodes1):
-        super(Vanilla_GNN2, self).__init__()
+        super(VanillaGNN2, self).__init__()
 
         self.gnn1_pool = GNN(num_features, num_hidden_unit, num_nodes1)
         self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
@@ -154,3 +154,40 @@ class Vanilla_GNN2(torch.nn.Module):
         x = self.lin2(x)
 
         return F.log_softmax(x, dim=-1), l, e, x_gnn2_embed, cluster_assignment1
+
+
+
+class ChocolateGNN(torch.nn.Module):
+    def __init__(self, num_features, num_hidden_unit, num_classes, num_nodes1):
+        super(ChocolateGNN, self).__init__()
+
+        self.gnn1_pool = GNN(num_features, num_hidden_unit, num_nodes1)
+        self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
+
+        self.gnn2_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
+
+        self.gnn3_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
+
+        self.lin1 = torch.nn.Linear(num_hidden_unit, num_hidden_unit)
+        self.lin2 = torch.nn.Linear(num_hidden_unit, num_classes)
+    
+
+    def forward(self, x, adj, mask=None):
+        s = self.gnn1_pool(x, adj, mask)
+        x = self.gnn1_embed(x, adj, mask)
+
+        x, adj, l, e, _ = my_dense_diff_pool(x, adj, s, mask)
+
+        x = self.gnn2_embed(x, adj)
+
+        x = global_mean_pool(x, mask)
+        
+        x = x.unsqueeze(1).expand(-1, 12, -1)
+        
+        x = self.gnn3_embed(x, adj)
+
+        x = x.mean(dim=1)
+        x = F.relu(self.lin1(x))
+        x = self.lin2(x)
+
+        return F.log_softmax(x, dim=-1), l, e

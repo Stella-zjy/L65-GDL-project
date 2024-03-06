@@ -28,6 +28,10 @@ def train(model, loader, optimizer, criterion, model_type = 'diffpool'):
         elif model_type == 'vanilla2':
             out, l, e, _, _ = model(batched_x, adj)
             loss = criterion(out, data.y) + l + e
+        
+        elif model_type =='chocolate':
+            out, l, e = model(batched_x, adj)
+            loss = criterion(out, data.y) + l + e
 
         loss.backward()
         optimizer.step()
@@ -55,6 +59,9 @@ def test(model, loader, criterion, model_type = 'diffpool'):
             
             elif model_type == 'vanilla2':
                 out, _, _, _, _ = model(batched_x, adj)
+            
+            elif model_type =='chocolate':
+                out, _, _ = model(batched_x, adj)
             
             loss = criterion(out, data.y)
             total_loss += loss.item()
