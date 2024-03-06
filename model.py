@@ -36,7 +36,7 @@ def my_dense_diff_pool(x: Tensor, adj: Tensor, s: Tensor, mask: Optional[Tensor]
 
 class GNN(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels,
-                 normalize=False, lin=True):
+                 normalize=False):
         super(GNN, self).__init__()
 
         self.convs = torch.nn.ModuleList()
@@ -69,9 +69,9 @@ class DiffPoolGNN(torch.nn.Module):
         self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
 
         self.gnn2_pool = GNN(num_hidden_unit, num_hidden_unit, num_nodes2)
-        self.gnn2_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit, lin=False)
+        self.gnn2_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
 
-        self.gnn3_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit, lin=False)
+        self.gnn3_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
 
         self.lin1 = torch.nn.Linear(num_hidden_unit, num_hidden_unit)
         self.lin2 = torch.nn.Linear(num_hidden_unit, num_classes)
@@ -125,3 +125,32 @@ class Vanilla_GNN(torch.nn.Module):
         x = self.lin2(x)
 
         return F.log_softmax(x, dim=-1), x_gnn1_embed
+    
+
+
+class Vanilla_GNN2(torch.nn.Module):
+    def __init__(self, num_features, num_hidden_unit, num_classes, num_nodes1):
+        super(Vanilla_GNN2, self).__init__()
+
+        self.gnn1_pool = GNN(num_features, num_hidden_unit, num_nodes1)
+        self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
+
+        self.gnn2_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
+
+        self.lin1 = torch.nn.Linear(num_hidden_unit, num_hidden_unit)
+        self.lin2 = torch.nn.Linear(num_hidden_unit, num_classes)
+
+    def forward(self, x, adj, mask=None):
+        s = self.gnn1_pool(x, adj, mask)
+        x = self.gnn1_embed(x, adj, mask)
+
+        x, adj, l, e, cluster_assignment1 = my_dense_diff_pool(x, adj, s, mask)
+
+        x = self.gnn2_embed(x, adj)
+        x_gnn2_embed = x
+
+        x = x.mean(dim=1)
+        x = F.relu(self.lin1(x))
+        x = self.lin2(x)
+
+        return F.log_softmax(x, dim=-1), l, e, x_gnn2_embed, cluster_assignment1
