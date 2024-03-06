@@ -10,8 +10,8 @@ from train import *
 import json
 
 
-SEEDS = [1, 12, 123, 1234, 12345]
-NUM_HIDDEN_UNIT = [32, 40]
+SEEDS = [8, 88, 888, 8888, 88888]
+NUM_HIDDEN_UNIT = [40, 64]
 NUM_NODES1 = [8, 12]
 NUM_NODES2 = [2, 4]
 
@@ -22,7 +22,6 @@ def main():
     train_split = 0.8
     batch_size = 16
     visual_batch_size = 200
-    train_loader, val_loader, test_loader, _ = prepare_data(dataset, train_split, batch_size, visual_batch_size)
 
     model_stats = dict()
 
@@ -36,6 +35,9 @@ def main():
                 for seed in SEEDS:
 
                     torch.manual_seed(seed)
+                    np.random.seed(seed)
+                    
+                    train_loader, val_loader, test_loader, _ = prepare_data(dataset, train_split, batch_size, visual_batch_size)
 
                     # Define the model
                     model = DiffPoolGNN(dataset.num_features, num_hidden_unit, dataset.num_classes, num_nodes1, num_nodes2)
