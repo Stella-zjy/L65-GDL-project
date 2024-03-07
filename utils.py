@@ -453,20 +453,22 @@ def find_top_closest(features_np, labels_km, centroids, top_n=5):
     return top_closest_indices
 
 
+
 def visualize_graphs_with_diffpool_clusters(data, cluster_top_features, node_info, labels, clustering_type,
                                             layer_num, k, num_of_diffpool, cluster_assignments1, graph_nodes):
     """
     Visualizes the graphs with specified nodes highlighted and labeled by concepts, along with their diff-pool cluster visualizations.
     """
-    num_rows = 3 * len(cluster_top_features) 
-    num_cols = max(len(v) for v in cluster_top_features.values())
+    num_rows = 2 * len(cluster_top_features) 
+    # num_cols = max(len(v) for v in cluster_top_features.values())
+    num_cols = 6
 
     # Pre-compute the starting index for each graph
     starting_indices = [0]  # The first graph starts at index 0
     for num_nodes in graph_nodes[:-1]:  # Exclude the last graph as its starting index is not needed
         starting_indices.append(starting_indices[-1] + num_nodes)
 
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(20, 12 * len(cluster_top_features) + 2), squeeze=False)
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(24, 8 * len(cluster_top_features) + 2), squeeze=False)
     fig.suptitle(
         f'{clustering_type} Central Instances, K-Means node concept with k={k}, {num_of_diffpool} DiffPool clusters, {layer_num}',
         y=1.005)
@@ -479,37 +481,40 @@ def visualize_graphs_with_diffpool_clusters(data, cluster_top_features, node_inf
 
             # Original Graph Visualization
             G = to_networkx(data[batch_index], to_undirected=True)
+            pos = nx.spring_layout(G)
             
-            # ======================== Highlighted Pooled Instances ======================== 
+            # ======================== Highlighted Pooled Instances with Atom Type Labels ======================== 
             start_index = starting_indices[batch_index]
             node_labels = {i: labels[start_index + i] for i in G.nodes()}
             node_colors = ["gray" if i not in node_indexes else "red" for i in G.nodes()]
 
-            ax = axes[3 * (cluster_idx * num_cols + feature_idx)]
-            nx.draw(G, ax=ax, node_color=node_colors, labels=node_labels, with_labels=True, node_size=50)
+            
+            ax = axes[2 * (cluster_idx * num_cols + feature_idx)]
+            nx.draw(G, ax=ax, pos = pos, node_color=node_colors, labels=node_labels, with_labels=True, node_size=50)
             ax.set_title(f"Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
 
-            # ======================== Complete Pooled Instances ========================         
-            all_nodes_diffpool_assignments = get_cluster_assignments(cluster_assignments1, graph_nodes)
-            cluster_assignments = get_cluster_assignments_for_graph(batch_index, all_nodes_diffpool_assignments,
-                                                                    graph_nodes)
+            # # ======================== Complete Pooled Instances ========================         
+            # all_nodes_diffpool_assignments = get_cluster_assignments(cluster_assignments1, graph_nodes)
+            # cluster_assignments = get_cluster_assignments_for_graph(batch_index, all_nodes_diffpool_assignments,
+            #                                                         graph_nodes)
             
-            diffpool_node_colors = [cluster_assignments[i] for i in G.nodes()]
+            # diffpool_node_colors = [cluster_assignments[i] for i in G.nodes()]
             
-            ax = axes[3 * (cluster_idx * num_cols + feature_idx) + 1]
-            nx.draw(G, ax=ax, node_color=diffpool_node_colors, labels=node_labels, with_labels=True,
-                    cmap=plt.get_cmap('viridis'), node_size=50)
-            ax.set_title(f"Diff-Pool of Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
+            # ax = axes[3 * (cluster_idx * num_cols + feature_idx) + 1]
+            # nx.draw(G, ax=ax, pos = pos, node_color=diffpool_node_colors, labels=node_labels, with_labels=True,
+            #         cmap=plt.get_cmap('viridis'), node_size=50)
+            # ax.set_title(f"Diff-Pool of Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
 
             # ======================== Graph visualization with Atom Types ======================== 
             atom_mapping = ["C", "O", "Cl", "H", "N", "F", "Br", "S", "P", "I", "Na", "K", "Li", "Ca"]
             atom_type = np.argmax(data[batch_index].x.detach().numpy(), axis = 1)
             
             atom_labels = {i: atom_mapping[atom_type[i]] for i in G.nodes()}
-            ax = axes[3 * (cluster_idx * num_cols + feature_idx) + 2]
-            nx.draw(G, ax=ax, node_color=atom_type, labels=atom_labels, with_labels=True,
+
+            ax = axes[2 * (cluster_idx * num_cols + feature_idx) + 1]
+            nx.draw(G, ax=ax, pos = pos, node_color=atom_type, labels=atom_labels, with_labels=True,
                     cmap=plt.get_cmap('viridis'), node_size=50)
-            ax.set_title(f"(Atoms) Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
+            ax.set_title(f"(Atom Type) Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
                         
 
     plt.tight_layout()
@@ -539,32 +544,7 @@ def get_cluster_assignments_for_graph_2nddiffpool(graph_index, all_nodes_diffpoo
     return all_nodes_diffpool_assignments[start_index:end_index]
 
 
-def get_cluster_assignments_2nddiffpool(cluster_assignments, nodes_per_graph, graph_nodes_enumerate_2):
-    """
-    Create a list of cluster assignments for each node across all graphs, given direct cluster indices.
 
-    Parameters:
-    - cluster_assignments: Tensor of shape (num_graphs, max_nodes) containing direct cluster indices for each node.
-    - nodes_per_graph: List of integers indicating the number of true nodes in each graph.
-
-    Returns:
-    - List of integers representing the cluster assignment for each node.
-    """
-    all_nodes_assignments = []
-
-    # Iterate over each graph
-    for graph_idx, num_nodes in enumerate(nodes_per_graph):
-        # Extract the cluster assignments for the actual number of nodes in the current graph
-
-        # graph_assignments = cluster_assignments[graph_idx][:num_nodes]
-        graph_assignments = []
-        for i in range(num_nodes):
-            graph_assignments.append(cluster_assignments[graph_idx, graph_nodes_enumerate_2[graph_idx][i]])
-
-        # Since cluster_assignments already contain direct cluster indices, append them directly
-        all_nodes_assignments.extend(graph_assignments)
-
-    return all_nodes_assignments
 
 def visualize_graphs_with_2nddiffpool_clusters(data, cluster_top_features, node_info, labels, clustering_type,
                                                layer_num, k, num_of_diffpool, cluster_assignments1, graph_nodes,
@@ -572,7 +552,7 @@ def visualize_graphs_with_2nddiffpool_clusters(data, cluster_top_features, node_
     """
     Visualizes the graphs with specified nodes highlighted and labeled by concepts, along with their diff-pool cluster visualizations.
     """
-    num_rows = 2 * len(cluster_top_features)
+    num_rows = len(cluster_top_features)
     num_cols = max(len(v) for v in cluster_top_features.values())
 
     # Pre-compute the starting index for each graph
@@ -580,14 +560,12 @@ def visualize_graphs_with_2nddiffpool_clusters(data, cluster_top_features, node_
     for num_nodes in graph_nodes[:-1]:  # Exclude the last graph as its starting index is not needed
         starting_indices.append(starting_indices[-1] + num_nodes)
 
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(20, 12 * len(cluster_top_features) + 2), squeeze=False)
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(20, 4 * len(cluster_top_features) + 2), squeeze=False)
     fig.suptitle(
         f'{clustering_type} Central Instances, K-Means node concept with k={k}, {num_of_diffpool} DiffPool clusters, {layer_num}',
         y=1.005)
 
     axes = axes.flatten()
-    all_nodes_diffpool_assignments = get_cluster_assignments_2nddiffpool(cluster_assignments1, graph_nodes,
-                                                                         graph_nodes_enumerate_2)
 
     for cluster_idx, (cluster, feature_indexes) in enumerate(cluster_top_features.items()):
         for feature_idx, feature_index in enumerate(feature_indexes):
@@ -616,37 +594,17 @@ def visualize_graphs_with_2nddiffpool_clusters(data, cluster_top_features, node_
             node_labels = {i: labels[start_index + i] for i in list(range(len(G.nodes())))}
             node_colors = ["gray" if i not in node_indexes else "red" for i in G.nodes()]
 
-            ax = axes[2 * (cluster_idx * num_cols + feature_idx)]
+            ax = axes[(cluster_idx * num_cols + feature_idx)]
 
-            nx.draw(G, ax=ax, node_color=node_colors, labels=node_labels, with_labels=True, node_size=50)
+            nx.draw(G, ax=ax, node_color=node_colors, labels=node_labels, with_labels=True, node_size=200, font_size = 12)
             ax.set_title(f"Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
 
-            # ======================== Complete Pooled Instances ========================
 
-            cluster_assignments = get_cluster_assignments_for_graph_2nddiffpool(batch_index,
-                                                                                all_nodes_diffpool_assignments,
-                                                                                graph_nodes)
-
-            diffpool_node_colors = [cluster_assignments[i] for i in G.nodes()]
-
-            ax = axes[2 * (cluster_idx * num_cols + feature_idx) + 1]
-            nx.draw(G, ax=ax, node_color=diffpool_node_colors, labels=node_labels, with_labels=True,
-                    cmap=plt.get_cmap('viridis'), node_size=50)
-            ax.set_title(f"Diff-Pool of Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
-
-            # # ======================== Graph visualization with Atom Types ========================
-            # atom_mapping = ["C", "O", "Cl", "H", "N", "F", "Br", "S", "P", "I", "Na", "K", "Li", "Ca"]
-            # atom_type = np.argmax(data[batch_index].x.detach().numpy(), axis = 1)
-
-            # atom_labels = {i: atom_mapping[atom_type[i]] for i in G.nodes()}
-            # ax = axes[3 * (cluster_idx * num_cols + feature_idx) + 2]
-            # nx.draw(G, ax=ax, node_color=atom_type, labels=atom_labels, with_labels=True,
-            #         cmap=plt.get_cmap('viridis'), node_size=50)
-            # ax.set_title(f"(Atoms) Cluster {cluster}, Feature {feature_index}, Graph{batch_index}")
 
     plt.tight_layout()
     plt.savefig(f"graph_visualization_{clustering_type}_central_instances.png")
     plt.show()
+
 
 
 from sklearn.model_selection import train_test_split
