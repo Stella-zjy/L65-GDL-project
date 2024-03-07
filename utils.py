@@ -95,11 +95,11 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_no
     # To the same for the revavent s
     s = torch.cat(relevant_s, dim=0)
 
-    # s clustering
-    num_unique_rows_s, indices_s = s_clustering(s)
+    # # s clustering
+    # num_unique_rows_s, indices_s = s_clustering(s)
 
-    # CEM-clustering
-    num_unique_rows_cem, indices_cem = cem_clustering(features)
+    # # CEM-clustering
+    # num_unique_rows_cem, indices_cem = cem_clustering(features)
     
 
     # Convert to numpy for dimensionality reduction
@@ -113,31 +113,31 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_no
     features_DR = dimension_reduction(features_np, DR_method)
 
 
-    # ========================== Plotting Activation Space (Binarized-S colored) ==========================
-    colors_s = plt.cm.jet(np.linspace(0, 1, num_unique_rows_s))
+    # # ========================== Plotting Activation Space (Binarized-S colored) ==========================
+    # colors_s = plt.cm.jet(np.linspace(0, 1, num_unique_rows_s))
 
-    for i, label in enumerate(indices_s):
-        plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors_s[int(label)], label=f'Cluster {int(label)}')
+    # for i, label in enumerate(indices_s):
+    #     plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors_s[int(label)], label=f'Cluster {int(label)}')
 
-    plt.xlabel(f'{DR_method} Component 1')
-    plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (Binarised-S colored with {num_unique_rows_s} clusters)')
-    # Adjust subplot parameters to give some space for the legend
-    plt.subplots_adjust(right=0.75)
-    plt.show()    
+    # plt.xlabel(f'{DR_method} Component 1')
+    # plt.ylabel(f'{DR_method} Component 2')
+    # plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (Binarised-S colored with {num_unique_rows_s} clusters)')
+    # # Adjust subplot parameters to give some space for the legend
+    # plt.subplots_adjust(right=0.75)
+    # plt.show()    
 
-    # ========================== Plotting Activation Space (CEM colored) ==========================
-    colors_cem = plt.cm.jet(np.linspace(0, 1, num_unique_rows_cem))
+    # # ========================== Plotting Activation Space (CEM colored) ==========================
+    # colors_cem = plt.cm.jet(np.linspace(0, 1, num_unique_rows_cem))
 
-    for i, label in enumerate(indices_cem):
-        plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors_cem[int(label)], label=f'Cluster {int(label)}')
+    # for i, label in enumerate(indices_cem):
+    #     plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors_cem[int(label)], label=f'Cluster {int(label)}')
 
-    plt.xlabel(f'{DR_method} Component 1')
-    plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (CEM colored with {num_unique_rows_cem} clusters)')
-    # Adjust subplot parameters to give some space for the legend
-    plt.subplots_adjust(right=0.75)
-    plt.show()        
+    # plt.xlabel(f'{DR_method} Component 1')
+    # plt.ylabel(f'{DR_method} Component 2')
+    # plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (CEM colored with {num_unique_rows_cem} clusters)')
+    # # Adjust subplot parameters to give some space for the legend
+    # plt.subplots_adjust(right=0.75)
+    # plt.show()        
 
 
     # ========================== Plotting Activation Space (K-Means colored) ==========================
@@ -228,18 +228,18 @@ def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate,
     labels_dp = torch.cat(relevant_cluster_assignments).detach().cpu().numpy()
     
     
-    # ========================== Plotting Activation Space (CEM colored) ==========================
-    colors0 = plt.cm.jet(np.linspace(0, 1, num_unique_rows))
+    # # ========================== Plotting Activation Space (CEM colored) ==========================
+    # colors0 = plt.cm.jet(np.linspace(0, 1, num_unique_rows))
 
-    for i, label in enumerate(indices):
-        plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors0[int(label)], label=f'Cluster {int(label)}')
+    # for i, label in enumerate(indices):
+    #     plt.scatter(features_DR[i, 0], features_DR[i, 1], color=colors0[int(label)], label=f'Cluster {int(label)}')
 
-    plt.xlabel(f'{DR_method} Component 1')
-    plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (CEM colored with {num_unique_rows} clusters)')
-    # Adjust subplot parameters to give some space for the legend
-    plt.subplots_adjust(right=0.75)
-    plt.show()            
+    # plt.xlabel(f'{DR_method} Component 1')
+    # plt.ylabel(f'{DR_method} Component 2')
+    # plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (CEM colored with {num_unique_rows} clusters)')
+    # # Adjust subplot parameters to give some space for the legend
+    # plt.subplots_adjust(right=0.75)
+    # plt.show()            
          
 
     # ========================== Plotting Activation Space (K-Means colored) ==========================
@@ -308,6 +308,42 @@ def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate,
   
 
     return labels_km, centroids, colors_km, colors_dp, labels_dp, features_np, info_graph_node
+
+
+
+def concept_analysis(cluster_assignments, graph_nodes_enumerate, low_level_concepts, top_n = 5):
+    first_diffpool_concepts = []
+    for graph_idx, graph_cluster_assignment in enumerate(cluster_assignments):
+        first_diffpool_concepts += graph_cluster_assignment[graph_nodes_enumerate[graph_idx]]
+    first_diffpool_concepts = np.array(first_diffpool_concepts)
+
+    # concept_analysis[cluster_idx] is a distionary recording the node concepts combination in cluster cluster_idx
+    concept_analysis = []
+    for cluster in range(max(first_diffpool_concepts) + 1):
+        concept_analysis.append(dict())
+
+    # Iterate through all nodes and record the node concepts in each cluster
+    for i in range(len(low_level_concepts)):
+        dp_cluster = first_diffpool_concepts[i]
+        node_concept = low_level_concepts[i]
+        if node_concept not in concept_analysis[dp_cluster]:
+            concept_analysis[dp_cluster][node_concept] = 1
+        else:
+            concept_analysis[dp_cluster][node_concept] += 1
+
+    # Sort the dictionary by the number of nodes in each node concept
+    for cluster in range(len(concept_analysis)):
+        concept_analysis[cluster] = dict(sorted(concept_analysis[cluster].items(), key=lambda item: item[1], reverse=True))
+
+    # Record the top 5 node concepts in each cluster
+    top_concepts = dict()
+    for cluster in range(len(concept_analysis)):
+        cluster_concepts = []
+        for concept, count in list(concept_analysis[cluster].items())[:top_n]:
+            cluster_concepts.append((concept, count))
+        top_concepts[cluster] = cluster_concepts
+
+    return top_concepts
 
 
 
