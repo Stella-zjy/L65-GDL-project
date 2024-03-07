@@ -647,3 +647,48 @@ def visualize_graphs_with_2nddiffpool_clusters(data, cluster_top_features, node_
     plt.tight_layout()
     plt.savefig(f"graph_visualization_{clustering_type}_central_instances.png")
     plt.show()
+
+
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+import numpy as np
+
+
+def train_evaluate_random_forest_for_concept_completeness(graph_nodes, node_concepts, num_concepts, labels):
+    #  example train_evaluate_random_forest(graph_nodes, labels, 50, np.array(data.y))
+    def one_hot_encode_graphs(graph_nodes, node_concepts, num_concepts):
+        # Initialize the output array with zeros
+        one_hot_encoded = np.zeros((len(graph_nodes), num_concepts), dtype=int)
+        # Index to track the current position in node_concepts
+        current_index = 0
+        # Iterate over each graph to process its concepts
+        for i, num_nodes in enumerate(graph_nodes):
+            concepts_for_graph = node_concepts[current_index:current_index + num_nodes]
+            current_index += num_nodes
+            for concept in concepts_for_graph:
+                one_hot_encoded[i, concept] = 1
+        return one_hot_encoded
+
+    # Perform one-hot encoding
+    onehotconcepts = one_hot_encode_graphs(graph_nodes, node_concepts, num_concepts)
+
+    random_seeds = [42, 50, 60, 70, 80]
+    accuracies = []
+
+    for seed in random_seeds:
+        # Split the data into training and testing sets using the current seed
+        X_train, X_test, y_train, y_test = train_test_split(onehotconcepts, labels, test_size=0.2, random_state=seed)
+        # Initialize and train the Random Forest classifier
+        rf_classifier = RandomForestClassifier(n_estimators=100, random_state=seed)
+        rf_classifier.fit(X_train, y_train)
+        # Predict the labels for the testing set
+        y_pred = rf_classifier.predict(X_test)
+        # Calculate and store the accuracy for the current split
+        accuracy = accuracy_score(y_test, y_pred)
+        accuracies.append(accuracy)
+
+    # Calculate the average accuracy and variance
+    average_accuracy = np.mean(accuracies)
+    variance_accuracy = np.var(accuracies)
+    return average_accuracy, variance_accuracy
