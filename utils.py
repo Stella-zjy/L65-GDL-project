@@ -607,13 +607,18 @@ def visualize_graphs_with_2nddiffpool_clusters(data, cluster_top_features, node_
 
 
 
+# Concept Completeness Analysis
+
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 import numpy as np
+import random
+from train import test
+from torch_geometric.data import DataLoader
 
 
-def train_evaluate_random_forest_for_concept_completeness(graph_nodes, node_concepts, num_concepts, labels):
+def train_evaluate_random_forest_for_concept_completeness(model, data_used, graph_nodes, node_concepts, num_concepts, labels):
     #  example train_evaluate_random_forest(graph_nodes, labels, 50, np.array(data.y))
     def one_hot_encode_graphs(graph_nodes, node_concepts, num_concepts):
         # Initialize the output array with zeros
@@ -625,28 +630,44 @@ def train_evaluate_random_forest_for_concept_completeness(graph_nodes, node_conc
             concepts_for_graph = node_concepts[current_index:current_index + num_nodes]
             current_index += num_nodes
             for concept in concepts_for_graph:
-                one_hot_encoded[i, concept] = 1
+                one_hot_encoded[i, concept] += 1
         return one_hot_encoded
 
     # Perform one-hot encoding
     onehotconcepts = one_hot_encode_graphs(graph_nodes, node_concepts, num_concepts)
 
-    random_seeds = [42, 50, 60, 70, 80]
-    accuracies = []
+    indices = np.arange(len(onehotconcepts))
+
+    random_seeds = random.choices(range(1000), k=50)
+    list_concept_completeness = []
+   
 
     for seed in random_seeds:
         # Split the data into training and testing sets using the current seed
-        X_train, X_test, y_train, y_test = train_test_split(onehotconcepts, labels, test_size=0.2, random_state=seed)
+        X_train, X_test, y_train, y_test, _, idx_test = train_test_split(onehotconcepts, labels, indices, test_size=0.3, random_state=seed)
+
+
         # Initialize and train the Random Forest classifier
-        rf_classifier = RandomForestClassifier(n_estimators=100, random_state=seed)
+        rf_classifier = RandomForestClassifier(n_estimators=80, random_state=seed)
         rf_classifier.fit(X_train, y_train)
         # Predict the labels for the testing set
         y_pred = rf_classifier.predict(X_test)
         # Calculate and store the accuracy for the current split
         accuracy = accuracy_score(y_test, y_pred)
-        accuracies.append(accuracy)
 
-    # Calculate the average accuracy and variance
-    average_accuracy = np.mean(accuracies)
-    variance_accuracy = np.var(accuracies)
-    return average_accuracy, variance_accuracy
+
+        data_test = data_used[idx_test]
+        data_test_loader = DataLoader(data_test, batch_size=len(data_test), shuffle=False)
+        criterion = torch.nn.CrossEntropyLoss()
+        _, diffpool_test_acc = test(model, data_test_loader, criterion)
+
+        if diffpool_test_acc > 0.9:
+            break
+
+        # print('Accuracy:', accuracy)
+        # print('Diffpool Test Accuracy:', diffpool_test_acc)
+        list_concept_completeness.append((accuracy-0.5)/(diffpool_test_acc-0.5))
+
+    concept_completeness = np.mean(list_concept_completeness)
+    
+    return concept_completeness
