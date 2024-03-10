@@ -61,7 +61,7 @@ def test(model, loader, criterion, model_type = 'diffpool'):
             if model_type == 'diffpool':
                 out, _, _, _, _, _, _, _, _, _, _, _, _ = model(batched_x, adj)
 
-            elif model_type == 'diffpool_noembed':
+            elif model_type == '3diffpool_noembed':
                 out, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = model(batched_x, adj)
 
             elif model_type == '3diffpool_withembed':
