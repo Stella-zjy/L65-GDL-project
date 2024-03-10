@@ -20,6 +20,14 @@ def train(model, loader, optimizer, criterion, model_type = 'diffpool'):
             out, l, e, _, _, _, _, _, _, _, _, _, _ = model(batched_x, adj)
             loss = criterion(out, data.y) + l + e
 
+        elif model_type == '3diffpool_noembed':
+            out, l, e, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = model(batched_x, adj)
+            loss = criterion(out, data.y) + l + e
+
+        elif model_type == '3diffpool_withembed':
+            out, l, e, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = model(batched_x, adj)
+            loss = criterion(out, data.y) + l + e
+
         # Used for training Vanilla GNN
         elif model_type == 'vanilla':
             out, _ = model(batched_x, adj)
@@ -52,6 +60,12 @@ def test(model, loader, criterion, model_type = 'diffpool'):
 
             if model_type == 'diffpool':
                 out, _, _, _, _, _, _, _, _, _, _, _, _ = model(batched_x, adj)
+
+            elif model_type == 'diffpool_noembed':
+                out, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = model(batched_x, adj)
+
+            elif model_type == '3diffpool_withembed':
+                out, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = model(batched_x, adj)
 
             # Used for training Vanilla GNN
             elif model_type == 'vanilla':

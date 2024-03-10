@@ -103,7 +103,112 @@ class DiffPoolGNN(torch.nn.Module):
 
         return F.log_softmax(x,dim=-1), l1 + l2, e1 + e2, s_gnn1_pool, x_gnn1_embed, s_gnn2_pool, x_gnn2_embed, x_gnn3_embed, new_graph_adj, cluster_assignment1, cluster_assignment2, out1, out2
 
-    
+
+class DiffPoolGNN_3DiffPool(torch.nn.Module):
+    def __init__(self, num_features, num_hidden_unit, num_classes, num_nodes1, num_nodes2, num_nodes3):
+        super(DiffPoolGNN_3DiffPool, self).__init__()
+
+        self.gnn1_pool = GNN(num_features, num_hidden_unit, num_nodes1)
+        self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
+
+        self.gnn2_pool = GNN(num_hidden_unit, num_hidden_unit, num_nodes2)
+        self.gnn2_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
+
+        self.gnn3_pool = GNN(num_hidden_unit, num_hidden_unit, num_nodes3)
+        self.gnn3_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
+
+        self.lin1 = torch.nn.Linear(num_hidden_unit, num_hidden_unit)
+        self.lin2 = torch.nn.Linear(num_hidden_unit, num_classes)
+
+    def forward(self, x, adj, mask=None):
+        s = self.gnn1_pool(x, adj, mask)
+        s_gnn1_pool = s
+        x = self.gnn1_embed(x, adj, mask)
+        x_gnn1_embed = x
+
+        x, adj, l1, e1, cluster_assignment1 = my_dense_diff_pool(x, adj, s, mask)
+        out1 = x
+        new_graph_adj_1 = adj
+
+        s = self.gnn2_pool(x, adj)
+        s_gnn2_pool = s
+        x = self.gnn2_embed(x, adj)
+        x_gnn2_embed = x
+
+        x, adj, l2, e2, cluster_assignment2 = my_dense_diff_pool(x, adj, s)
+        out2 = x
+        new_graph_adj_2 = adj
+
+        s = self.gnn3_pool(x, adj)
+        s_gnn3_pool = s
+        x = self.gnn3_embed(x, adj)
+        x_gnn3_embed = x
+
+        x, adj, l3, e3, cluster_assignment3 = my_dense_diff_pool(x, adj, s)
+        new_graph_adj_3 = adj
+        out3 = x
+
+        x = x.mean(dim=1)
+        x = F.relu(self.lin1(x))
+        x = self.lin2(x)
+
+        return F.log_softmax(x,dim=-1), l1 + l2 + l3, e1 + e2 + e3, s_gnn1_pool, x_gnn1_embed, s_gnn2_pool, x_gnn2_embed, s_gnn3_pool, x_gnn3_embed, new_graph_adj_1, new_graph_adj_2, new_graph_adj_3, cluster_assignment1, cluster_assignment2, cluster_assignment3, out1, out2, out3
+
+
+class DiffPoolGNN_3DiffPool_addlastembed(torch.nn.Module):
+    def __init__(self, num_features, num_hidden_unit, num_classes, num_nodes1, num_nodes2, num_nodes3):
+        super(DiffPoolGNN_3DiffPool_addlastembed, self).__init__()
+
+        self.gnn1_pool = GNN(num_features, num_hidden_unit, num_nodes1)
+        self.gnn1_embed = GNN(num_features, num_hidden_unit, num_hidden_unit)
+
+        self.gnn2_pool = GNN(num_hidden_unit, num_hidden_unit, num_nodes2)
+        self.gnn2_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
+
+        self.gnn3_pool = GNN(num_hidden_unit, num_hidden_unit, num_nodes3)
+        self.gnn3_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
+
+        self.gnn4_embed = GNN(num_hidden_unit, num_hidden_unit, num_hidden_unit)
+
+        self.lin1 = torch.nn.Linear(num_hidden_unit, num_hidden_unit)
+        self.lin2 = torch.nn.Linear(num_hidden_unit, num_classes)
+
+    def forward(self, x, adj, mask=None):
+        s = self.gnn1_pool(x, adj, mask)
+        s_gnn1_pool = s
+        x = self.gnn1_embed(x, adj, mask)
+        x_gnn1_embed = x
+
+        x, adj, l1, e1, cluster_assignment1 = my_dense_diff_pool(x, adj, s, mask)
+        out1 = x
+        new_graph_adj_1 = adj
+
+        s = self.gnn2_pool(x, adj)
+        s_gnn2_pool = s
+        x = self.gnn2_embed(x, adj)
+        x_gnn2_embed = x
+
+        x, adj, l2, e2, cluster_assignment2 = my_dense_diff_pool(x, adj, s)
+        out2 = x
+        new_graph_adj_2 = adj
+
+        s = self.gnn3_pool(x, adj)
+        s_gnn3_pool = s
+        x = self.gnn3_embed(x, adj)
+        x_gnn3_embed = x
+
+        x, adj, l3, e3, cluster_assignment3 = my_dense_diff_pool(x, adj, s)
+        new_graph_adj_3 = adj
+        out3 = x
+
+        x = self.gnn4_embed(x, adj)
+        x_gnn4_embed = x
+
+        x = x.mean(dim=1)
+        x = F.relu(self.lin1(x))
+        x = self.lin2(x)
+
+        return F.log_softmax(x,dim=-1), l1 + l2 + l3, e1 + e2 + e3, s_gnn1_pool, x_gnn1_embed, s_gnn2_pool, x_gnn2_embed, s_gnn3_pool, x_gnn3_embed, x_gnn4_embed, new_graph_adj_1, new_graph_adj_2, new_graph_adj_3, cluster_assignment1, cluster_assignment2, cluster_assignment3, out1, out2, out3
 
 
 class VanillaGNN(torch.nn.Module):
