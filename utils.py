@@ -145,7 +145,7 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_no
     # Generate a colormap with distinct colors
     colors = plt.cm.jet(np.linspace(0, 1, k))
 
-    # plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(8, 6))
 
     for i, label in enumerate(range(k)):
         idx = labels == label
@@ -155,12 +155,12 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_no
     plt.ylabel(f'{DR_method} Component 2')
     plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (K-Means colored)')
     # Place the legend outside the plot
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
-    plt.subplots_adjust(right=0.75)
+    # plt.subplots_adjust(right=0.75)
     plt.show()    
 
-    # ========================== Plotting Activation Space (Ground Truth Label colored) ========================= 
+    # ========================== Plotting Activation Space (Predicted Label colored) ========================= 
     
     colors2 = plt.cm.jet(np.linspace(0, 1, 2))
 
@@ -179,7 +179,7 @@ def before_diffpool_plot(activation_space_before, s_gnn_pool, y_labels, graph_no
 
     plt.xlabel(f'{DR_method} Component 1')
     plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (Ground Truth Label colored)')
+    plt.title(f'{DR_method} Visualization of Activation Space before {layer_num} (Predicted Label colored)')
     # Place the legend outside the plot
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
@@ -266,7 +266,7 @@ def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate,
     # Generate a colormap with distinct colors according to diffpool clusters
     colors_dp = plt.cm.jet(np.linspace(0, 1, num_dp_clusters)) 
 
-    plt.figure()
+    plt.figure(figsize=(8, 6))
     for i, label in enumerate(range(num_dp_clusters)):
         idx = labels_dp == label
         plt.scatter(features_DR[idx, 0], features_DR[idx, 1], color=colors_dp[i], label=f'Cluster {label}')
@@ -275,12 +275,12 @@ def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate,
     plt.ylabel(f'{DR_method} Component 2')
     plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (DiffPool colored)')
     # Place the legend outside the plot
-    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    # plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
-    plt.subplots_adjust(right=0.75)
+    # plt.subplots_adjust(right=0.75)
     plt.show()  
 
-    # ========================== Plotting Activation Space (Ground Truth Label colored) ========================== 
+    # ========================== Plotting Activation Space (Predicted Label colored) ========================== 
 
     colors_label = plt.cm.jet(np.linspace(0, 1, 2)) 
     
@@ -299,7 +299,7 @@ def after_diffpool_plot(activation_space_after, y_labels, graph_nodes_enumerate,
 
     plt.xlabel(f'{DR_method} Component 1')
     plt.ylabel(f'{DR_method} Component 2')
-    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (Ground Truth Label colored)')
+    plt.title(f'{DR_method} Visualization of Activation Space after {layer_num} (Predicted Label colored)')
     # Place the legend outside the plot
     plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     # Adjust subplot parameters to give some space for the legend
